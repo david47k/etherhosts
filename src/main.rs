@@ -5,6 +5,7 @@
 use std::env;
 use std::fs; 
 use chrono::{DateTime, Local};
+use regex::Regex;
 
 fn process_csv_line(mut line: String) -> Vec<String> {                  // This function splits a CSV line at commas, and handles basic quoted text
     // Replace "" with space, and store the location
@@ -42,6 +43,57 @@ fn process_csv_line(mut line: String) -> Vec<String> {                  // This 
     return cells;
 }
 
+fn clean_ipaddr(s: &str) -> String {
+	let rs = s.trim();
+	if valid_ipaddr(rs) {
+		return rs.to_string();
+	} else {
+		return "".to_string();
+	}
+}
+
+fn valid_ipaddr(s: &str) -> bool {
+	let re = Regex::new(r"^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.)){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$").unwrap();	
+	return re.is_match(s);
+}
+
+fn clean_mac(s: &str) -> String {
+	// convert windows hyphens into colons
+	let rs: String = s.trim().chars().map(|c| 
+		if c=='-' { 
+			return ':';
+		} else {
+			return c;
+		}
+	).collect();
+	
+	if valid_mac(&rs) {
+		return rs;
+	} else {
+		return "".to_string();
+	}
+}
+
+fn valid_mac(s: &str) -> bool {
+	let re = Regex::new(r"^[a-fA-F0-9]{2}(:[a-fA-F0-9]{2}){5}$").unwrap();
+	return re.is_match(s);
+}
+
+fn clean_hostname(s: &str) -> String {
+	let rs: String = s.trim().to_string();
+
+	if valid_hostname(&rs) {
+		return rs;
+	} else {
+		return "".to_string();
+	}
+}
+
+fn valid_hostname(s: &str) -> bool {
+	// it doesn't need to be perfect, just needs to filter out obvious mistakes
+	let re = Regex::new(r"^([a-zA-Z0-9-\. ]*)$").unwrap();
+	return re.is_match(s);	
+}
 
 fn main() {
     // display program info
@@ -114,20 +166,29 @@ fn main() {
     for (r,line) in lines.enumerate() {
         let fields = process_csv_line(line.to_string());
 
+		let ipaddr = clean_ipaddr(&fields[ipaddrcol]);
+		let hostname = clean_hostname(&fields[hostnamecol]);
+		let mac = clean_mac(&fields[maccol]);
+
+		if ipaddr.len() == 0 {
+			println!("Invalid ipaddr at line {}, skipping this line", r+2);
+			continue;
+		}
+
         // add to hosts, if we have all the data for it
-        if fields[ipaddrcol].len() > 0 && fields[hostnamecol].len() > 0 {
-            let hostline = format!("{} {}\n", fields[ipaddrcol], fields[hostnamecol]);
+        if hostname.len() > 0 {
+            let hostline = format!("{} {}\n", ipaddr, hostname);
             hoststxt.push_str(&hostline);
         } else {
-            println!("Missing ipaddr or hostname at line {}, hosts skipping this line", r+2);
+            println!("Invalid hostname at line {}, hosts skipping this line", r+2);
         }
 
         // add to ethers, if we have all the data for it
-        if fields[maccol].len() > 0 && fields[ipaddrcol].len() > 0 {
-            let etherline = format!("{} {}\n", fields[maccol], fields[ipaddrcol]);
+        if mac.len() > 0 {
+            let etherline = format!("{} {}\n", mac, ipaddr);
             etherstxt.push_str(&etherline);
         } else {
-            println!("Missing mac or ipaddr at line {}, ethers skipping this line", r+2);
+            println!("Invalid mac at line {}, ethers skipping this line", r+2);
         }
     }
 

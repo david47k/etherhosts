@@ -1,7 +1,7 @@
-ipaddr,hostname,mac,comment
-127.0.0.1,localhost localhost.localdomain,,
-192.168.1.1,myrouter myrouter.lan,,manually assigned
-192.168.1.2,pc,ab:cd:ef:01:23:45,
-192.168.1.3,phone,cd:ef:01:23:45:67,
-192.168.1.4,ipad,ef:01:23:45:67:89,
-142.250.70.174,work.example.com,,
+ipaddr,mac,hostname,comment
+127.0.0.1,		,					localhost localhost.localdomain,
+192.168.1.1,	,					myrouter myrouter.lan,				manually assigned
+192.168.1.2,	ab:cd:ef:01:23:45,	homepc,								no comment
+192.168.1.3,	cd:ef:01:23:45:67,	work-laptop,						no comment
+192.168.1.4,	ef:01:23:45:67:89,	ipad,
+142.250.70.174,	fe-ed-00-11-22-22,	work.example.com,
