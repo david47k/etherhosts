@@ -7,7 +7,14 @@ use std::fs;
 use chrono::{DateTime, Local};
 use regex::Regex;
 
-fn process_csv_line(mut line: String) -> Vec<String> {                  // This function splits a CSV line at commas, and handles basic quoted text
+fn process_csv_line(txt: &str) -> Vec<String> {                  
+    // This function splits a CSV line at commas, and handles basic quoted text
+    // It does not handle multiline text
+    
+    // Make a copy of the input string
+    let mut line = String::from(txt);
+    
+    // A "" should be translated to a single quote
     // Replace "" with space, and store the location
     let mut ddq = Vec::<usize>::new();   
     let mut f = line.find("\"\"");
@@ -43,23 +50,41 @@ fn process_csv_line(mut line: String) -> Vec<String> {                  // This 
     return cells;
 }
 
-fn clean_ipaddr(s: &str) -> String {
-	let rs = s.trim();
-	if valid_ipaddr(rs) {
-		return rs.to_string();
+fn clean_ipaddr(s: &str) -> Result<String, String>  {
+	// This function checks (and performs minor cleaning of) an ipv4 dotted decimal address.
+	// It returns an Ok(String) for a valid ipaddr, and
+	// Err(String) for an erroneous (or missing) address.
+	
+	// trim both sides of any extra whitespace
+	let s = s.trim();
+	
+	// check it matches a basic ipv4 dotted decimal pattern
+	let re = Regex::new(r"^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.)){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$").unwrap();	
+
+	// return a copy of the ipaddr if it matches, otherwise return an error
+	if re.is_match(s) {
+		return Ok(s.to_string());
 	} else {
-		return "".to_string();
+		return Err("ipaddr failed regex check".to_string());
 	}
 }
 
-fn valid_ipaddr(s: &str) -> bool {
-	let re = Regex::new(r"^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.)){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$").unwrap();	
-	return re.is_match(s);
-}
+fn clean_mac(s: &str) -> Result<String, String> {
+	// This function checks (and performs minor cleaning of) a mac address.
+	// It returns an Ok(String) for a valid mac address, and
+	// Err("") for a blank macaddr, and 
+	// Err(String) for an erroneous address.
 
-fn clean_mac(s: &str) -> String {
+	// trim both sides of any extra whitespace
+	let s = s.trim();
+	
+	// if the macaddr is empty, return a blank string as err
+	if s.len() == 0 {
+	    return Err("".to_string());
+	}
+
 	// convert windows hyphens into colons
-	let rs: String = s.trim().chars().map(|c| 
+	let s: String = s.chars().map(|c| 
 		if c=='-' { 
 			return ':';
 		} else {
@@ -67,39 +92,48 @@ fn clean_mac(s: &str) -> String {
 		}
 	).collect();
 	
-	if valid_mac(&rs) {
-		return rs;
+	// make the macaddr lowercase
+	let s: String = s.to_lowercase();
+	
+	// check the string matches a basic mac address pattern
+	let re = Regex::new(r"^[a-f0-9]{2}(:[a-f0-9]{2}){5}$").unwrap();
+
+	// return the mac address if it matches, otherwise return an error
+	if re.is_match(&s) {
+		return Ok(s);
 	} else {
-		return "".to_string();
+		return Err("macaddr failed regex check".to_string());
 	}
 }
 
-fn valid_mac(s: &str) -> bool {
-	let re = Regex::new(r"^[a-fA-F0-9]{2}(:[a-fA-F0-9]{2}){5}$").unwrap();
-	return re.is_match(s);
-}
+fn clean_hostname(s: &str) -> Result<String, String> {
+	// This function checks (and performs minor cleaning of) a hostname.
+	// It returns an Ok(String) for a valid hostname, and
+	// Err("") for a blank hostname, and 
+	// Err(String) for an erroneous hostname.
 
-fn clean_hostname(s: &str) -> String {
-	let rs: String = s.trim().to_string();
+	// trim both sides of any extra whitespace
+	let s: String = s.trim().to_string();
 
-	if valid_hostname(&rs) {
-		return rs;
-	} else {
-		return "".to_string();
+	// if the hostname is empty, return a blank string as err
+	if s.len() == 0 {
+	    return Err("".to_string());
 	}
-}
 
-fn valid_hostname(s: &str) -> bool {
-	// it doesn't need to be perfect, just needs to filter out obvious mistakes
+	// check for obvious mistakes in hostname
 	let re = Regex::new(r"^([a-zA-Z0-9-\. ]*)$").unwrap();
-	return re.is_match(s);	
+
+	if re.is_match(&s) {
+		return Ok(s);
+	} else {
+		return Err("hostname failed regex check".to_string());
+	}
 }
 
 fn main() {
     // display program info
-    println!("etherhosts: Create hosts and ethers files from CSV");
-    println!("usage: etherhosts [etherhosts.csv] [hosts] [ethers]");
-    println!("");
+    println!("Etherhosts: Create hosts and ethers files from CSV");
+    println!("Usage: etherhosts [etherhosts.csv] [hosts] [ethers]");
 
     // filenames
     let mut inputfile = "etherhosts.csv";
@@ -123,7 +157,7 @@ fn main() {
     let mut lines = input.lines();
 
     // read first line to determine positions of each column
-    let header_row = process_csv_line(lines.next().expect("Input file didn't have a single line!").to_string());
+    let header_row = process_csv_line(&lines.next().expect("Input file didn't have a single line!").to_string());
     let mut ipaddrcol: usize = 0;
     let mut hostnamecol: usize = 0;
     let mut maccol: usize = 0;
@@ -138,20 +172,21 @@ fn main() {
         } else if field == "hostname" {
             found_h = true;
             hostnamecol = c;
-        } else if field == "mac" {
+        } else if field == "macaddr" {
             found_m = true;
             maccol = c;
         }
     }
 
     if !(found_i && found_h && found_m) {
-        println!("Couldn't find all the headers: ipaddr, hostname, mac");
+        println!("Couldn't find all the headers: ipaddr, hostname, macaddr");
         return;
     }
 
-    println!("Processing input file: {}", inputfile);
+    // display our input and output file names
+    println!("Input csv:     {}\nOutput hosts:  {}\nOutput ethers: {}", inputfile, hostsfile, ethersfile);
 
-    // store hosts and ethers in strings
+    // hosts and ethers to be stored in strings
     let mut hoststxt = String::new();
     let mut etherstxt = String::new();
 
@@ -164,31 +199,43 @@ fn main() {
 
     // process each line of the input file
     for (r,line) in lines.enumerate() {
-        let fields = process_csv_line(line.to_string());
+        let fields = process_csv_line(&line.to_string());
 
-		let ipaddr = clean_ipaddr(&fields[ipaddrcol]);
-		let hostname = clean_hostname(&fields[hostnamecol]);
-		let mac = clean_mac(&fields[maccol]);
-
-		if ipaddr.len() == 0 {
-			println!("Invalid ipaddr at line {}, skipping this line", r+2);
-			continue;
+	let ipaddr = match clean_ipaddr(&fields[ipaddrcol]) {
+	    Ok(s)  => s,
+	    Err(s) => {
+		println!("skipping line {}: {}", r+2, s);
+		continue;
+	    }
+	};
+		
+	match clean_hostname(&fields[hostnamecol]) {
+	    Ok(hostname)  => {
+		// add to hosts
+		// ipaddr can be padded using {: <15}
+		let hostline = format!("{} {}\n", ipaddr, hostname);
+		hoststxt.push_str(&hostline);
+	    },
+	    Err(s) => {
+		// If the string is empty, it's simply a blank hostname and not a real error
+		if s.len() != 0 {
+		    println!("invalid hostname on line {}: {}", r+2, s);
 		}
-
-        // add to hosts, if we have all the data for it
-        if hostname.len() > 0 {
-            let hostline = format!("{} {}\n", ipaddr, hostname);
-            hoststxt.push_str(&hostline);
-        } else {
-            println!("Invalid hostname at line {}, hosts skipping this line", r+2);
-        }
-
-        // add to ethers, if we have all the data for it
-        if mac.len() > 0 {
-            let etherline = format!("{} {}\n", mac, ipaddr);
-            etherstxt.push_str(&etherline);
-        } else {
-            println!("Invalid mac at line {}, ethers skipping this line", r+2);
+	    }
+	}
+	    
+	match clean_mac(&fields[maccol]) {
+	    Ok(macaddr)  => {
+		// add to ethers
+		let etherline = format!("{} {}\n", macaddr, ipaddr);
+		etherstxt.push_str(&etherline);
+	    },
+	    Err(s) => {
+		// If the string is empty, it's simply a blank macaddr and not a real error
+		if s.len() != 0 {
+		    println!("invalid macaddr on line {}: {}", r+2, s);
+		}
+	    }
         }
     }
 

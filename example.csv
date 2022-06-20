@@ -1,4 +1,4 @@
-ipaddr,mac,hostname,comment
+ipaddr,macaddr,hostname,comment
 127.0.0.1,,localhost localhost.localdomain,
 192.168.1.1,,myrouter myrouter.lan,manually assigned
 192.168.1.2,ab:cd:ef:01:23:45,homepc,no comment
